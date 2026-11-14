@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Art Label &amp; Barcode Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="lib/JsBarcode.all.min.js"></script>
+<script src="lib/qrcode.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="lib/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#f6f5f2; --panel:#ffffff; --ink:#1d1d1f; --muted:#6b6b70; --line:#e3e1dc;
+    --accent:#2f4b7c; --accent-soft:#e8edf6; --ok:#2e7d4f; --warn:#a15c00; --err:#b3261e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#141416; --panel:#1d1d20; --ink:#ececee; --muted:#9c9ca3; --line:#33333a;
+      --accent:#8fb0ea; --accent-soft:#232c3d; --ok:#6fcf97; --warn:#f2b45a; --err:#f28b82; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px;line-height:1.45}
+  header{padding:20px 24px 8px}
+  h1{font-size:20px;margin:0 0 4px;font-weight:700;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0}
+  nav{display:flex;gap:4px;padding:12px 24px 0;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+  nav button{background:none;border:none;padding:10px 14px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  main{padding:20px 24px 60px;max-width:1100px}
+  section{display:none}
+  section.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0 0 10px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
+  input[type=text],input[type=number],select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+  textarea{width:100%;min-height:110px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .btn{font:inherit;font-weight:600;border-radius:6px;padding:8px 14px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:#fff}
+  @media (prefers-color-scheme: dark){ .btn{color:#10141c} }
+  .btn.ghost{background:transparent;color:var(--accent)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .chk{display:flex;gap:6px;align-items:center;font-size:13px}
+  .note{font-size:12.5px;color:var(--muted)}
+  .msg{font-size:13px;margin-top:8px;min-height:18px}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--err)} .msg.warn{color:var(--warn)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{font-size:12px;color:var(--muted);font-weight:600}
+  td.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  .tablewrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11.5px;background:var(--accent-soft);color:var(--accent)}
+  .labels-preview{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+  .labels-preview svg{background:#fff;border:1px solid #ccc;border-radius:4px}
+  .single-out{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;margin-top:12px}
+  .single-out .box{background:#fff;border:1px solid #ccc;border-radius:6px;padding:10px;text-align:center}
+  .single-out canvas{max-width:100%;height:auto;display:block}
+  .steps{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
+  .steps li{margin:3px 0}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Art Label &amp; Barcode Studio</h1>
+  <p class="sub">Turn your Art Catalog into POS-ready barcodes, phone-scannable QR codes, printable label sheets and an online-store product file.</p>
+</header>
+<nav id="tabs">
+  <button data-t="import" class="on">1 · Load catalog</button>
+  <button data-t="labels">2 · Print labels</button>
+  <button data-t="images">3 · Barcode images</button>
+  <button data-t="store">4 · Online store file</button>
+  <button data-t="single">Quick barcode</button>
+</nav>
+<main>
+
+<!-- IMPORT -->
+<section id="s-import" class="on">
+  <div class="card">
+    <h2>Load your catalog</h2>
+    <ol class="steps">
+      <li>In your <b>Art Catalog</b> sheet, download the <b>Catalog</b> tab as a <b>CSV</b> file.</li>
+      <li>Choose that file below, or paste its contents in the box.</li>
+      <li>Only rows that have a SKU are loaded.</li>
+    </ol>
+    <div class="row" style="margin-top:12px">
+      <input type="file" id="csvFile" accept=".csv,text/csv">
+      <button class="btn ghost" id="loadExample">Load example row</button>
+      <button class="btn ghost" id="clearAll">Clear</button>
+    </div>
+    <p class="note" style="margin:12px 0 4px">…or paste CSV text:</p>
+    <textarea id="csvPaste" placeholder="SKU,Item #,QR code,Photo link,Title / description,Type,Medium,..."></textarea>
+    <div class="row" style="margin-top:8px"><button class="btn" id="parsePaste">Load pasted CSV</button></div>
+    <div class="msg" id="importMsg"></div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Pieces loaded <span class="pill" id="countPill">0</span></h2>
+      <div class="row">
+        <input type="text" id="search" placeholder="Search SKU, title, tags…" style="min-width:220px">
+        <select id="statusFilter"><option value="">All statuses</option></select>
+        <button class="btn ghost" id="selAll">Select shown</button>
+        <button class="btn ghost" id="selNone">Select none</button>
+      </div>
+    </div>
+    <p class="note">Checked pieces are the ones used for labels, images and the store file. <span id="selCount"></span></p>
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>SKU</th><th>Title</th><th>Medium</th><th>Size</th><th>Status</th><th>Price</th></tr></thead>
+      <tbody id="itemRows"></tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- LABELS -->
+<section id="s-labels">
+  <div class="card">
+    <h2>Label sheet (PDF)</h2>
+    <div class="row">
+      <label class="f">Label paper
+        <select id="tpl">
+          <option value="5160">Avery 5160 / 8160 · 1" × 2⅝" · 30 per sheet</option>
+          <option value="5163">Avery 5163 / 8163 · 2" × 4" · 10 per sheet</option>
+          <option value="5167">Avery 5167 · ½" × 1¾" · 80 per sheet (barcode only)</option>
+          <option value="22806">Avery 22806 · 2" × 2" square · 12 per sheet</option>
+        </select>
+      </label>
+      <label class="f">Copies per piece <input type="number" id="copies" value="1" min="1" max="10" style="width:80px"></label>
+      <label class="f">Skip used labels <input type="number" id="skip" value="0" min="0" style="width:80px"></label>
+    </div>
+    <div class="row" style="margin-top:12px;gap:18px">
+      <label class="chk"><input type="checkbox" id="optQR" checked> QR code (phones)</label>
+      <label class="chk"><input type="checkbox" id="optBar" checked> Barcode (POS scanner)</label>
+      <label class="chk"><input type="checkbox" id="optTitle" checked> Title</label>
+      <label class="chk"><input type="checkbox" id="optPrice" checked> Price</label>
+      <label class="chk"><input type="checkbox" id="optOutline"> Print outlines (test sheet)</label>
+    </div>
+    <p class="note">Print at <b>100% / Actual size</b>, not "Fit to page", or the labels won't line up. Run a test on plain paper first.</p>
+    <div class="row" style="margin-top:6px">
+      <button class="btn" id="makePdf">Download label PDF</button>
+      <button class="btn ghost" id="printPdf">Open PDF to print</button>
+    </div>
+    <div class="msg" id="labelMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Preview <span class="note" id="previewNote"></span></h2>
+    <div class="labels-preview" id="labelPreview"></div>
+  </div>
+</section>
+
+<!-- IMAGES -->
+<section id="s-images">
+  <div class="card">
+    <h2>Barcode &amp; QR images (ZIP)</h2>
+    <p class="note">One PNG per piece, named by SKU, e.g. <code>WP-PAS-0001_barcode.png</code> and <code>WP-PAS-0001_qr.png</code>. You can upload these to your website, add them to product photos, or use them in Canva or a label program.</p>
+    <div class="row" style="margin-top:8px;gap:18px">
+      <label class="chk"><input type="checkbox" id="imgBar" checked> Code 128 barcodes</label>
+      <label class="chk"><input type="checkbox" id="imgQR" checked> QR codes</label>
+      <label class="chk"><input type="checkbox" id="imgSvg"> Also include SVG (sharp at any size)</label>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn" id="makeZip">Download images ZIP</button></div>
+    <div class="msg" id="imgMsg"></div>
+  </div>
+</section>
+
+<!-- STORE -->
+<section id="s-store">
+  <div class="card">
+    <h2>Online store product file (CSV)</h2>
+    <div class="row">
+      <label class="f">Format
+        <select id="storeFmt">
+          <option value="shopify">Shopify product import</option>
+          <option value="generic">General (WooCommerce, Square, Etsy, Big Cartel…)</option>
+        </select>
+      </label>
+      <label class="f">Store / brand name (Vendor)
+        <input type="text" id="vendor" placeholder="e.g. Max Barrett Art" style="min-width:220px">
+      </label>
+      <label class="f">Shopify status
+        <select id="shopStatus"><option value="draft">Draft (review before live)</option><option value="active">Active (live)</option></select>
+      </label>
+    </div>
+    <div class="row" style="margin-top:12px;gap:18px">
+      <label class="chk"><input type="checkbox" id="onlyAvail" checked> Only pieces with Status = Available</label>
+    </div>
+    <p class="note">The SKU becomes both the product SKU and its <b>barcode</b> field, so scanning a label at your POS finds the right item. The description is written from medium, support, size, period and condition. A Photo link column starting with <code>https://</code> is used as the product image.</p>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="makeCsv">Download store CSV</button>
+      <button class="btn ghost" id="copyCsv">Copy CSV</button>
+    </div>
+    <div class="msg" id="storeMsg"></div>
+  </div>
+  <div class="card">
+    <h2>Preview (first 3)</h2>
+    <div class="tablewrap" style="max-height:300px"><table id="storePreview"></table></div>
+  </div>
+</section>
+
+<!-- SINGLE -->
+<section id="s-single">
+  <div class="card">
+    <h2>Quick barcode</h2>
+    <p class="note">Make a barcode and QR code for any text or SKU, without loading the catalog.</p>
+    <div class="row" style="margin-top:8px">
+      <label class="f">Text / SKU <input type="text" id="singleText" value="WP-PAS-0001" style="min-width:260px"></label>
+      <label class="f">QR contains
+        <select id="singleQrMode"><option value="text">Same text</option><option value="url">A web link</option></select>
+      </label>
+      <label class="f" id="singleUrlWrap" style="display:none">Web link <input type="text" id="singleUrl" placeholder="https://yoursite.com/products/..." style="min-width:260px"></label>
+    </div>
+    <div class="single-out">
+      <div class="box"><canvas id="singleBar"></canvas><div class="row" style="justify-content:center;margin-top:8px"><button class="btn ghost" id="dlBarPng">PNG</button><button class="btn ghost" id="dlBarSvg">SVG</button></div></div>
+      <div class="box"><canvas id="singleQr"></canvas><div class="row" style="justify-content:center;margin-top:8px"><button class="btn ghost" id="dlQrPng">PNG</button><button class="btn ghost" id="dlQrSvg">SVG</button></div></div>
+    </div>
+    <div class="msg" id="singleMsg"></div>
+  </div>
+</section>
+
+</main>
+
+<script>
+/* ---------------- state ---------------- */
+let items = [];            // normalized pieces
+let selected = new Set();  // SKUs
+let downloads = null;
+(async () => { try { if (window.claude && claude.use) downloads = await claude.use("downloads"); } catch(e){ downloads = null; } })();
+
+const $ = id => document.getElementById(id);
+function msg(id, text, kind){ const el=$(id); el.textContent=text||''; el.className='msg '+(kind||''); }
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('#tabs button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('main section').forEach(s=>s.classList.toggle('on',s.id==='s-'+b.dataset.t));
+  if(b.dataset.t==='labels') renderPreview();
+  if(b.dataset.t==='store') renderStorePreview();
+  if(b.dataset.t==='single') renderSingle();
+}));
+
+/* ---------------- CSV ---------------- */
+function parseCSV(text){
+  const rows=[]; let row=[], f='', q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if(c==='"') q=true;
+    else if(c===','){ row.push(f); f=''; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=''; }
+    else f+=c;
+  }
+  if(f!==''||row.length){ row.push(f); rows.push(row); }
+  return rows.filter(r=>r.some(v=>v.trim()!==''));
+}
+function csvCell(v){ v = v==null?'':String(v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function toCSV(rows){ return rows.map(r=>r.map(csvCell).join(',')).join('\r\n'); }
+
+const strip = s => (s||'').replace(/\s*\([A-Z0-9]{1,5}\)\s*$/,'').trim();
+const money = s => { const n=parseFloat(String(s||'').replace(/[^0-9.]/g,'')); return isNaN(n)?null:n; };
+
+function normalize(rows){
+  const head = rows[0].map(h=>h.trim().toLowerCase());
+  const col = (...names)=>{ for(const n of names){ const i=head.indexOf(n.toLowerCase()); if(i>=0) return i; } return -1; };
+  const C = {
+    sku:col('SKU'), title:col('Title / description','Title'), type:col('Type'), med:col('Medium'), med2:col('Medium 2'),
+    support:col('Support'), subject:col('Subject'), style:col('Style'), color:col('Main color'), artist:col('Artist'),
+    sig:col('Signature'), period:col('Est. period'), sizeCat:col('Size category'), size:col('Image size (in)'),
+    framed:col('Framed size (in)'), framing:col('Framing'), glazing:col('Glazing'), cond:col('Condition'),
+    status:col('Status'), price:col('Asking price','Price'), tags:col('Tags'), photo:col('Photo link')
+  };
+  if(C.sku<0) throw new Error('No "SKU" column found. Make sure you exported the Catalog tab.');
+  const g=(r,k)=> C[k]>=0 ? (r[C[k]]||'').trim() : '';
+  const out=[];
+  for(const r of rows.slice(1)){
+    const sku=g(r,'sku'); if(!sku) continue;
+    out.push({ sku, title:g(r,'title')||'Untitled', type:strip(g(r,'type')), medium:strip(g(r,'med')), medium2:strip(g(r,'med2')),
+      support:g(r,'support'), subject:g(r,'subject'), style:g(r,'style'), color:g(r,'color'), artist:g(r,'artist'),
+      signature:g(r,'sig'), period:g(r,'period'), sizeCat:g(r,'sizeCat'), size:g(r,'size'), framed:g(r,'framed'),
+      framing:g(r,'framing'), glazing:g(r,'glazing'), condition:g(r,'cond'), status:g(r,'status'),
+      price:money(g(r,'price')), tags:g(r,'tags'), photo:g(r,'photo') });
+  }
+  return out;
+}
+
+function loadText(text, source){
+  try{
+    const rows=parseCSV(text);
+    if(rows.length<2) throw new Error('That file has no rows under the header.');
+    const list=normalize(rows);
+    const seen=new Set(), dups=new Set();
+    list.forEach(i=>{ if(seen.has(i.sku)) dups.add(i.sku); seen.add(i.sku); });
+    items=list; selected=new Set(items.map(i=>i.sku));
+    save(); renderTable(); fillStatus();
+    msg('importMsg', `Loaded ${items.length} piece${items.length===1?'':'s'} from ${source}.` + (dups.size?` Warning: duplicate SKUs ${[...dups].join(', ')}.`:''), dups.size?'warn':'ok');
+  }catch(e){ msg('importMsg', e.message, 'err'); }
+}
+
+$('csvFile').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const rd=new FileReader(); rd.onload=()=>loadText(rd.result, f.name); rd.readAsText(f);
+});
+$('parsePaste').addEventListener('click', ()=>loadText($('csvPaste').value, 'pasted text'));
+$('clearAll').addEventListener('click', ()=>{ items=[]; selected.clear(); save(); renderTable(); fillStatus(); msg('importMsg','Cleared.'); });
+
+const EXAMPLE = `SKU,Item #,QR code,Photo link,Title / description,Type,Medium,Medium 2,Support,Subject,Style,Main color,Artist,Signature,Marks / labels on back,Est. period,Size category,Image size (in),Framed size (in),Framing,Glazing,Condition,Condition issue,Treatment needed,Treatment 2,Treatment status,Location,Status,Source,Date acquired,Cost,Asking price,Sold price,Sold date,Buyer,Tags,Notes
+WP-PAS-0001,1,Open QR,,EXAMPLE – Untitled (still life; pears),Work on paper (WP),Soft pastel (PAS),Graphite / pencil (GRA),Paper,Still life,Realist,Green,Unknown,Initialed / monogram,Partial framer sticker,1960s,Small (under 12 in),9 x 12,14 x 17,Framed & matted,Glass,Fair,Smudging / loose pigment,Fixative,Tear repair,Needed,Bin 1,Available,Estate,11/14/2026,$5.00,$40.00,,,,"pears, kitchen, pastel",
+PT-ACR-0002,2,Open QR,,EXAMPLE – Untitled (abstract; blue and orange),Painting (PT),Acrylic (ACR),,Stretched canvas,Abstract,Mid-century modern,Blue,Unknown,Illegible signature,,1970s,Medium (12–24 in),18 x 24,,"Stretched, no frame",None,Good,None,,,Not needed,Rack 1,Available,Thrift / resale,11/14/2026,$10.00,$120.00,,,,"abstract, blue, orange, modern",
+DR-MKR-0003,3,Open QR,,EXAMPLE – Untitled (figure; marker sketch),Drawing (DR),Marker (MKR),Pen & ink (INK),Paper,Figure,Illustration,Black & white,Unknown,Unsigned,,1990s,Small (under 12 in),8.5 x 11,,Loose / unframed,None,Good,Crease / fold,Flattening / humidify,,Needed,Flat file,Available,Donation,11/14/2026,$0.00,$25.00,,,,"figure, sketch, marker",`;
+$('loadExample').addEventListener('click', ()=>loadText(EXAMPLE, 'example rows'));
+
+/* ---------------- storage (convenience only) ---------------- */
+function save(){ try{ localStorage.setItem('als_items', JSON.stringify(items)); localStorage.setItem('als_sel', JSON.stringify([...selected])); }catch(e){} }
+function restore(){ try{ const a=JSON.parse(localStorage.getItem('als_items')||'null'); const s=JSON.parse(localStorage.getItem('als_sel')||'null'); if(Array.isArray(a)&&a.length){ items=a; selected=new Set(Array.isArray(s)?s:a.map(i=>i.sku)); return true; } }catch(e){} return false; }
+
+/* ---------------- table ---------------- */
+function shown(){
+  const q=$('search').value.trim().toLowerCase(), st=$('statusFilter').value;
+  return items.filter(i=>(!st||i.status===st) && (!q || [i.sku,i.title,i.tags,i.medium,i.medium2,i.subject,i.color].join(' ').toLowerCase().includes(q)));
+}
+function fillStatus(){
+  const cur=$('statusFilter').value, sts=[...new Set(items.map(i=>i.status).filter(Boolean))].sort();
+  $('statusFilter').innerHTML='<option value="">All statuses</option>'+sts.map(s=>`<option ${s===cur?'selected':''}>${esc(s)}</option>`).join('');
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function renderTable(){
+  const list=shown();
+  $('countPill').textContent=items.length;
+  $('itemRows').innerHTML = list.length? list.map(i=>`<tr>
+    <td><input type="checkbox" data-sku="${esc(i.sku)}" ${selected.has(i.sku)?'checked':''}></td>
+    <td class="mono">${esc(i.sku)}</td><td>${esc(i.title)}</td><td>${esc([i.medium,i.medium2].filter(Boolean).join(' + '))}</td>
+    <td>${esc(i.size)}</td><td>${esc(i.status)}</td><td>${i.price!=null?'$'+i.price.toFixed(2):''}</td></tr>`).join('')
+    : `<tr><td colspan="7" class="note" style="padding:18px">No pieces yet. Load your catalog CSV above, or press "Load example row" to try it out.</td></tr>`;
+  $('selCount').textContent = items.length? `${selectedItems().length} of ${items.length} selected.`:'';
+}
+$('itemRows').addEventListener('change', e=>{ const s=e.target.dataset.sku; if(!s) return; e.target.checked?selected.add(s):selected.delete(s); save(); renderTable(); });
+$('search').addEventListener('input', renderTable);
+$('statusFilter').addEventListener('change', renderTable);
+$('selAll').addEventListener('click', ()=>{ shown().forEach(i=>selected.add(i.sku)); save(); renderTable(); });
+$('selNone').addEventListener('click', ()=>{ selected.clear(); save(); renderTable(); });
+const selectedItems = ()=> items.filter(i=>selected.has(i.sku));
+
+/* ---------------- encoders ---------------- */
+function code128Bits(text){
+  const o={}; JsBarcode(o, text, {format:'CODE128'});
+  return (o.encodings||[]).map(e=>e.data).join('');
+}
+function qrMatrix(text){
+  const q=qrcode(0,'M'); q.addData(text); q.make();
+  const n=q.getModuleCount(), m=[];
+  for(let r=0;r<n;r++){ const row=[]; for(let c=0;c<n;c++) row.push(q.isDark(r,c)); m.push(row); }
+  return m;
+}
+
+/* ---------------- painters (PDF + SVG share layout) ---------------- */
+function pdfPainter(doc){
+  return {
+    rect:(x,y,w,h)=>doc.rect(x,y,w,h,'F'),
+    outline:(x,y,w,h)=>{ doc.setDrawColor(180); doc.setLineWidth(0.005); doc.roundedRect(x,y,w,h,0.06,0.06,'S'); },
+    text:(s,x,y,size,bold,align)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(size); doc.text(s,x,y,{align:align||'left',baseline:'top'}); },
+    width:(s,size,bold)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(size); return doc.getTextWidth(s); }
+  };
+}
+function svgPainter(parts, scale){
+  const W=(s,size,bold)=> s.length*size*(bold?0.56:0.52)/72; // inches, approx Helvetica
+  return {
+    rect:(x,y,w,h)=>parts.push(`<rect x="${(x*scale).toFixed(2)}" y="${(y*scale).toFixed(2)}" width="${(w*scale).toFixed(2)}" height="${(h*scale).toFixed(2)}" fill="#000"/>`),
+    outline:()=>{},
+    text:(s,x,y,size,bold,align)=>parts.push(`<text x="${(x*scale).toFixed(1)}" y="${((y+size*0.8/72)*scale).toFixed(1)}" font-family="Helvetica,Arial,sans-serif" font-size="${(size/72*scale).toFixed(2)}" ${bold?'font-weight="700"':''} text-anchor="${align==='center'?'middle':align==='right'?'end':'start'}" fill="#000">${esc(s)}</text>`),
+    width:W
+  };
+}
+function fit(p,s,size,bold,maxW){
+  if(p.width(s,size,bold)<=maxW) return s;
+  while(s.length>1 && p.width(s+'…',size,bold)>maxW) s=s.slice(0,-1);
+  return s.trimEnd()+'…';
+}
+function drawBars(p,bits,x,y,w,h){
+  const quiet=10, mw=w/(bits.length+quiet*2); let i=0;
+  while(i<bits.length){ if(bits[i]==='1'){ let j=i; while(j<bits.length&&bits[j]==='1') j++; p.rect(x+(quiet+i)*mw,y,(j-i)*mw,h); i=j; } else i++; }
+  return mw;
+}
+function drawQR(p,matrix,x,y,size){
+  const n=matrix.length, q=2, m=size/(n+q*2);
+  for(let r=0;r<n;r++){ let c=0; while(c<n){ if(matrix[r][c]){ let k=c; while(k<n&&matrix[r][k]) k++; p.rect(x+(q+c)*m,y+(q+r)*m,(k-c)*m+0.0005,m+0.0005); c=k; } else c++; } }
+}
+
+const TEMPLATES = {
+  '5160': {cols:3, rows:10, w:2.625, h:1, left:0.1875, top:0.5, px:2.75, py:1},
+  '5163': {cols:2, rows:5, w:4, h:2, left:0.15625, top:0.5, px:4.1875, py:2},
+  '5167': {cols:4, rows:20, w:1.75, h:0.5, left:0.28, top:0.5, px:2.05, py:0.5},
+  '22806':{cols:3, rows:4, w:2, h:2, left:0.625, top:0.625, px:2.625, py:2.5}
+};
+
+function labelOpts(){ return { qr:$('optQR').checked, bar:$('optBar').checked, title:$('optTitle').checked, price:$('optPrice').checked, outline:$('optOutline').checked }; }
+
+function drawLabel(p, item, x, y, T, o){
+  const pad = Math.min(0.08, T.h*0.1);
+  const small = T.h<=0.6, square = Math.abs(T.w-T.h)<0.01;
+  if(o.outline) p.outline(x,y,T.w,T.h);
+  const priceStr = (o.price && item.price!=null)? '$'+(item.price%1? item.price.toFixed(2): item.price.toFixed(0)) : '';
+  if(small){ // tiny label: barcode + SKU only
+    const bh=T.h-pad*2-0.12;
+    if(o.bar) drawBars(p,code128Bits(item.sku),x+pad,y+pad,T.w-pad*2,bh);
+    p.text(fit(p,item.sku+(priceStr?'  '+priceStr:''),6,true,T.w-pad*2), x+T.w/2, y+pad+bh+0.01, 6, true, 'center');
+    return;
+  }
+  if(square){
+    let cy=y+pad; const iw=T.w-pad*2;
+    if(o.title){ p.text(fit(p,item.title,8,false,iw),x+T.w/2,cy,8,false,'center'); cy+=0.17; }
+    const bottomH = 0.2 + (o.bar?0.42:0);
+    const qs = Math.max(0, T.h - (cy-y) - bottomH - pad);
+    if(o.qr && qs>0.3) { drawQR(p,qrMatrix(item.sku),x+(T.w-qs)/2,cy,qs); cy+=qs+0.02; }
+    if(o.bar){ drawBars(p,code128Bits(item.sku),x+pad,cy,iw,0.38); cy+=0.41; }
+    p.text(fit(p,item.sku+(priceStr?'   '+priceStr:''),9,true,iw),x+T.w/2,cy,9,true,'center');
+    return;
+  }
+  // rectangular labels
+  const big = T.h>=1.5;
+  let rx=x+pad, rw=T.w-pad*2;
+  if(o.qr){ const qs=T.h-pad*2; drawQR(p,qrMatrix(item.sku),x+pad*0.5,y+pad,qs); rx=x+pad*0.5+qs+pad*0.5; rw=x+T.w-pad-rx; }
+  const tSize = big?11:6.5, sSize = big?13:8, gap = big?0.06:0.025;
+  let cy=y+pad;
+  if(o.title){ p.text(fit(p,item.title,tSize,false,rw),rx,cy,tSize,false,'left'); cy+=tSize/72*1.2+gap; }
+  if(big){
+    const meta=[[item.medium,item.medium2].filter(Boolean).join(' + '),item.size?item.size+' in':''].filter(Boolean).join(' · ');
+    if(meta){ p.text(fit(p,meta,8.5,false,rw),rx,cy,8.5,false,'left'); cy+=8.5/72*1.2+gap; }
+  }
+  const footH = sSize/72*1.15;
+  const barH = (y+T.h-pad) - cy - footH - gap;
+  if(o.bar && barH>0.12) { drawBars(p,code128Bits(item.sku),rx-0.03,cy,rw+0.03,barH); cy+=barH+gap; }
+  else cy = y+T.h-pad-footH;
+  p.text(item.sku, rx, cy, sSize, true, 'left');
+  if(priceStr) p.text(priceStr, rx+rw, cy, sSize, true, 'right');
+}
+
+function labelQueue(){
+  const copies=Math.max(1,Math.min(10,parseInt($('copies').value)||1));
+  const q=[]; selectedItems().forEach(i=>{ for(let c=0;c<copies;c++) q.push(i); });
+  return q;
+}
+
+function buildPdf(){
+  const list=labelQueue();
+  if(!list.length) return null;
+  const T=TEMPLATES[$('tpl').value], o=labelOpts(), per=T.cols*T.rows;
+  const doc=new jspdf.jsPDF({unit:'in',format:'letter',orientation:'portrait'});
+  const p=pdfPainter(doc); doc.setFillColor(0,0,0); doc.setTextColor(0,0,0);
+  let slot=Math.max(0,parseInt($('skip').value)||0) % per;
+  list.forEach((item,idx)=>{
+    if(idx>0 && slot===0) doc.addPage();
+    const c=slot%T.cols, r=Math.floor(slot/T.cols);
+    doc.setFillColor(0,0,0);
+    drawLabel(p,item,T.left+c*T.px,T.top+r*T.py,T,o);
+    slot=(slot+1)%per;
+  });
+  return {blob:doc.output('blob'), count:list.length};
+}
+$('printPdf').addEventListener('click', ()=>{
+  try{ const r=buildPdf(); if(!r) return msg('labelMsg','Select at least one piece on the "Load catalog" tab.','err');
+    const url=URL.createObjectURL(r.blob); const win=window.open(url,'_blank');
+    if(!win) msg('labelMsg','Your browser blocked the new tab. Allow pop-ups for this site, or use Download.','warn');
+    else msg('labelMsg','Opened in a new tab. Print it at 100% / Actual size.','ok');
+  }catch(e){ msg('labelMsg','Could not make the PDF: '+e.message,'err'); }
+});
+$('makePdf').addEventListener('click', async ()=>{
+  const list=labelQueue();
+  if(!list.length) return msg('labelMsg','Select at least one piece on the "Load catalog" tab.','err');
+  try{
+    const T=TEMPLATES[$('tpl').value], o=labelOpts(), per=T.cols*T.rows;
+    const doc=new jspdf.jsPDF({unit:'in',format:'letter',orientation:'portrait'});
+    const p=pdfPainter(doc); doc.setFillColor(0,0,0); doc.setTextColor(0,0,0);
+    let slot=Math.max(0,parseInt($('skip').value)||0) % per;
+    list.forEach((item,idx)=>{
+      if(idx>0 && slot===0) doc.addPage();
+      const c=slot%T.cols, r=Math.floor(slot/T.cols);
+      doc.setFillColor(0,0,0);
+      drawLabel(p,item,T.left+c*T.px,T.top+r*T.py,T,o);
+      slot=(slot+1)%per;
+    });
+    const blob=doc.output('blob');
+    await offer(`art-labels-avery${$('tpl').value}.pdf`, blob, 'labelMsg', `${list.length} label${list.length===1?'':'s'}`);
+  }catch(e){ msg('labelMsg','Could not make the PDF: '+e.message,'err'); }
+});
+
+function renderPreview(){
+  const box=$('labelPreview'); const list=selectedItems().slice(0,6);
+  const T=TEMPLATES[$('tpl').value], o=labelOpts(), scale=110;
+  $('previewNote').textContent = list.length? `· actual size ${T.w}" × ${T.h}", showing ${list.length} of ${selectedItems().length}`:'';
+  if(!list.length){ box.innerHTML='<p class="note">Select pieces on the "Load catalog" tab to preview labels.</p>'; return; }
+  box.innerHTML = list.map(item=>{
+    const parts=[]; const p=svgPainter(parts,scale);
+    try{ drawLabel(p,item,0,0,T,Object.assign({},o,{outline:false})); }catch(e){}
+    return `<svg width="${T.w*scale}" height="${T.h*scale}" viewBox="0 0 ${T.w*scale} ${T.h*scale}">${parts.join('')}</svg>`;
+  }).join('');
+}
+['tpl','optQR','optBar','optTitle','optPrice'].forEach(id=>$(id).addEventListener('change',renderPreview));
+
+/* ---------------- images ---------------- */
+function barCanvas(text){
+  const c=document.createElement('canvas');
+  JsBarcode(c,text,{format:'CODE128',width:3,height:110,margin:24,fontSize:22,font:'Helvetica',background:'#ffffff',lineColor:'#000000'});
+  return c;
+}
+function barSVG(text){
+  const s=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  JsBarcode(s,text,{format:'CODE128',width:2,height:80,margin:16,fontSize:16,background:'#ffffff'});
+  s.setAttribute('xmlns','http://www.w3.org/2000/svg');
+  return new XMLSerializer().serializeToString(s);
+}
+function qrCanvas(text,label){
+  const m=qrMatrix(text), n=m.length, px=10, q=4, size=(n+q*2)*px, extra=label?44:0;
+  const c=document.createElement('canvas'); c.width=size; c.height=size+extra;
+  const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,c.width,c.height); g.fillStyle='#000';
+  for(let r=0;r<n;r++) for(let k=0;k<n;k++) if(m[r][k]) g.fillRect((q+k)*px,(q+r)*px,px,px);
+  if(label){ g.font='bold 22px Helvetica, Arial, sans-serif'; g.textAlign='center'; g.fillText(label,size/2,size+22); }
+  return c;
+}
+function qrSVG(text){
+  const m=qrMatrix(text), n=m.length, q=4, s=n+q*2; let d='';
+  for(let r=0;r<n;r++) for(let k=0;k<n;k++) if(m[r][k]) d+=`M${k+q} ${r+q}h1v1h-1z`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${s} ${s}" width="${s*10}" height="${s*10}" shape-rendering="crispEdges"><rect width="${s}" height="${s}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+}
+const canvasBlob = c => new Promise(res=>c.toBlob(res,'image/png'));
+const safeName = s => s.replace(/[^A-Za-z0-9._-]+/g,'_');
+
+$('makeZip').addEventListener('click', async ()=>{
+  const list=selectedItems();
+  if(!list.length) return msg('imgMsg','Select at least one piece on the "Load catalog" tab.','err');
+  const wantBar=$('imgBar').checked, wantQR=$('imgQR').checked, wantSvg=$('imgSvg').checked;
+  if(!wantBar&&!wantQR) return msg('imgMsg','Pick barcodes, QR codes, or both.','err');
+  try{
+    msg('imgMsg','Building images…');
+    const zip=new JSZip();
+    for(const i of list){
+      const n=safeName(i.sku);
+      if(wantBar){ zip.file(`barcodes/${n}_barcode.png`, await canvasBlob(barCanvas(i.sku))); if(wantSvg) zip.file(`barcodes/${n}_barcode.svg`, barSVG(i.sku)); }
+      if(wantQR){ zip.file(`qr/${n}_qr.png`, await canvasBlob(qrCanvas(i.sku,i.sku))); if(wantSvg) zip.file(`qr/${n}_qr.svg`, qrSVG(i.sku)); }
+    }
+    const blob=await zip.generateAsync({type:'blob'});
+    await offer('art-barcodes.zip', blob, 'imgMsg', `images for ${list.length} piece${list.length===1?'':'s'}`);
+  }catch(e){ msg('imgMsg','Could not build images: '+e.message,'err'); }
+});
+
+/* ---------------- store CSV ---------------- */
+const slug = s => s.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g,'').trim().replace(/[\s_]+/g,'-').replace(/-+/g,'-');
+function cleanTitle(t){ return t.replace(/^EXAMPLE\s*[–-]\s*/i,'').trim() || 'Untitled'; }
+function describe(i, html){
+  const medium=[i.medium,i.medium2].filter(Boolean).join(' and ').toLowerCase();
+  const support=(i.support||'').toLowerCase();
+  const bits=[];
+  if(medium) bits.push(`Original ${medium}${support&&support!=='unknown'?' on '+support:''}.`);
+  bits.push(i.artist && !/^unknown$/i.test(i.artist) ? `By ${i.artist}.` : 'Artist unknown.');
+  if(i.period && !/unknown/i.test(i.period)) bits.push(`Estimated ${i.period}.`);
+  const facts=[
+    ['Medium',[i.medium,i.medium2].filter(Boolean).join(', ')],
+    ['Support',i.support],
+    ['Image size',i.size?i.size+' in':''],
+    ['Framed size',i.framed?i.framed+' in':''],
+    ['Presentation',[i.framing,i.glazing&&i.glazing!=='None'?i.glazing:''].filter(Boolean).join(', ')],
+    ['Signature',i.signature],
+    ['Period',i.period],
+    ['Condition',i.condition],
+    ['Item #',i.sku]
+  ].filter(f=>f[1]);
+  if(!html) return bits.join(' ') + ' ' + facts.map(f=>`${f[0]}: ${f[1]}`).join('; ') + '.';
+  return `<p>${esc(bits.join(' '))}</p><ul>${facts.map(f=>`<li><strong>${esc(f[0])}:</strong> ${esc(f[1])}</li>`).join('')}</ul>`;
+}
+function tagList(i){ return [...new Set([i.subject,i.style,i.color,i.medium,i.medium2,i.type,...(i.tags||'').split(',')].map(s=>(s||'').trim()).filter(s=>s&&!/^unknown$/i.test(s)))].join(', '); }
+function storeRows(){
+  let list=selectedItems(); if($('onlyAvail').checked) list=list.filter(i=>/^available$/i.test(i.status||''));
+  const vendor=$('vendor').value.trim();
+  const photo=i=>/^https?:\/\//i.test(i.photo)?i.photo:'';
+  if($('storeFmt').value==='shopify'){
+    const head=['Handle','Title','Body (HTML)','Vendor','Product Category','Type','Tags','Published','Option1 Name','Option1 Value','Variant SKU','Variant Grams','Variant Inventory Tracker','Variant Inventory Qty','Variant Inventory Policy','Variant Fulfillment Service','Variant Price','Variant Requires Shipping','Variant Taxable','Variant Barcode','Image Src','Image Position','Image Alt Text','Status'];
+    const st=$('shopStatus').value;
+    return [head, ...list.map(i=>{ const t=cleanTitle(i.title); return [
+      slug(t+'-'+i.sku), t, describe(i,true), vendor, 'Arts & Entertainment > Hobbies & Creative Arts > Artwork', i.type||'Artwork', tagList(i),
+      st==='active'?'TRUE':'FALSE', 'Title','Default Title', i.sku, '', 'shopify', 1, 'deny', 'manual',
+      i.price!=null?i.price.toFixed(2):'', 'TRUE','TRUE', i.sku, photo(i), photo(i)?1:'', photo(i)?t:'', st ]; })];
+  }
+  const head=['SKU','Barcode','Name','Description','Price','Quantity','Category','Tags','Medium','Support','Dimensions (in)','Framed size (in)','Condition','Image URL','Brand'];
+  return [head, ...list.map(i=>[ i.sku, i.sku, cleanTitle(i.title), describe(i,false), i.price!=null?i.price.toFixed(2):'', 1, i.type||'Artwork', tagList(i),
+    [i.medium,i.medium2].filter(Boolean).join(', '), i.support, i.size, i.framed, i.condition, photo(i), vendor ])];
+}
+function renderStorePreview(){
+  const rows=storeRows(), t=$('storePreview');
+  if(rows.length<2){ t.innerHTML='<tr><td class="note" style="padding:14px">No pieces match. Check your selection, or untick "Only Available".</td></tr>'; return; }
+  const show=[0,1,2,6,10,16,19].filter(k=>k<rows[0].length);
+  const cols = $('storeFmt').value==='shopify'? show : [0,2,3,4,7];
+  t.innerHTML='<thead><tr>'+cols.map(k=>`<th>${esc(rows[0][k])}</th>`).join('')+'</tr></thead><tbody>'+
+    rows.slice(1,4).map(r=>'<tr>'+cols.map(k=>`<td>${esc(String(r[k]).slice(0,140))}</td>`).join('')+'</tr>').join('')+'</tbody>';
+}
+['storeFmt','onlyAvail','vendor','shopStatus'].forEach(id=>$(id).addEventListener('input',renderStorePreview));
+$('makeCsv').addEventListener('click', async ()=>{
+  const rows=storeRows(); if(rows.length<2) return msg('storeMsg','No pieces match. Check your selection, or untick "Only Available".','err');
+  await offer(`art-store-${$('storeFmt').value}.csv`, toCSV(rows), 'storeMsg', `${rows.length-1} product${rows.length===2?'':'s'}`);
+});
+$('copyCsv').addEventListener('click', async ()=>{
+  const rows=storeRows(); if(rows.length<2) return msg('storeMsg','No pieces match.','err');
+  try{ await navigator.clipboard.writeText(toCSV(rows)); msg('storeMsg','Copied. Paste into a blank text file and save it as .csv.','ok'); }
+  catch(e){ msg('storeMsg','Copy was blocked by the browser. Use Download instead.','err'); }
+});
+
+/* ---------------- quick barcode ---------------- */
+function singleQrText(){ return $('singleQrMode').value==='url' && $('singleUrl').value.trim() ? $('singleUrl').value.trim() : $('singleText').value.trim(); }
+function renderSingle(){
+  const t=$('singleText').value.trim(); $('singleUrlWrap').style.display=$('singleQrMode').value==='url'?'flex':'none';
+  if(!t){ msg('singleMsg','Type some text.','warn'); return; }
+  try{
+    JsBarcode($('singleBar'),t,{format:'CODE128',width:2.5,height:90,margin:16,fontSize:18,background:'#ffffff'});
+    const q=qrCanvas(singleQrText(), t), dst=$('singleQr'); dst.width=q.width; dst.height=q.height; dst.getContext('2d').drawImage(q,0,0);
+    dst.style.width=Math.min(260,q.width)+'px';
+    msg('singleMsg','');
+  }catch(e){ msg('singleMsg','That text can\'t be made into a barcode: '+e.message,'err'); }
+}
+['singleText','singleUrl','singleQrMode'].forEach(id=>$(id).addEventListener('input',renderSingle));
+$('dlBarPng').addEventListener('click', async ()=> offer(safeName($('singleText').value||'barcode')+'_barcode.png', await canvasBlob(barCanvas($('singleText').value.trim())), 'singleMsg','barcode'));
+$('dlBarSvg').addEventListener('click', ()=> offer(safeName($('singleText').value||'barcode')+'_barcode.svg', barSVG($('singleText').value.trim()), 'singleMsg','barcode'));
+$('dlQrPng').addEventListener('click', async ()=> offer(safeName($('singleText').value||'qr')+'_qr.png', await canvasBlob(qrCanvas(singleQrText(), $('singleText').value.trim())), 'singleMsg','QR code'));
+$('dlQrSvg').addEventListener('click', ()=> offer(safeName($('singleText').value||'qr')+'_qr.svg', qrSVG(singleQrText()), 'singleMsg','QR code'));
+
+/* ---------------- download helper ---------------- */
+async function offer(filename, data, msgId, what){
+  if(!downloads){ try{ if(window.claude&&claude.use) downloads=await claude.use("downloads"); }catch(e){} }
+  if(!downloads){
+    try{
+      const blob = data instanceof Blob ? data : new Blob([data], {type: filename.endsWith('.csv')?'text/csv':filename.endsWith('.svg')?'image/svg+xml':'application/octet-stream'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+      msg(msgId,`Saved ${what} as ${filename}.`,'ok');
+    }catch(e){ msg(msgId,'The download didn\'t go through: '+e.message,'err'); }
+    return;
+  }
+  try{ await downloads.save({filename, data}); msg(msgId,`Saved ${what} as ${filename}.`,'ok'); }
+  catch(e){
+    const code=e&&e.code;
+    if(code==='declined') msg(msgId,'Download cancelled.','warn');
+    else if(code==='rate_limited') msg(msgId,'A download prompt is already open. Finish it, then try again.','warn');
+    else msg(msgId,'The download didn\'t go through ('+(code||e.message||'unknown')+').','err');
+  }
+}
+
+/* ---------------- boot ---------------- */
+if(!restore()) loadText(EXAMPLE,'example rows');
+else { fillStatus(); }
+renderTable();
+</script>
+</body>
+</html>
