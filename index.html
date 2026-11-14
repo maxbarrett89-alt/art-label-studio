@@ -121,7 +121,7 @@
         <select id="tpl">
           <option value="5160">Avery 5160 / 8160 · 1" × 2⅝" · 30 per sheet</option>
           <option value="5163">Avery 5163 / 8163 · 2" × 4" · 10 per sheet</option>
-          <option value="5167">Avery 5167 · ½" × 1¾" · 80 per sheet (barcode only)</option>
+          <option value="5167">Avery 5167 · ½" × 1¾" · 80 per sheet (tiny: barcode, SKU, price)</option>
           <option value="22806">Avery 22806 · 2" × 2" square · 12 per sheet</option>
         </select>
       </label>
@@ -132,6 +132,8 @@
       <label class="chk"><input type="checkbox" id="optQR" checked> QR code (phones)</label>
       <label class="chk"><input type="checkbox" id="optBar" checked> Barcode (POS scanner)</label>
       <label class="chk"><input type="checkbox" id="optTitle" checked> Title</label>
+      <label class="chk"><input type="checkbox" id="optArtist" checked> Artist</label>
+      <label class="chk"><input type="checkbox" id="optMedium" checked> Medium</label>
       <label class="chk"><input type="checkbox" id="optPrice" checked> Price</label>
       <label class="chk"><input type="checkbox" id="optOutline"> Print outlines (test sheet)</label>
     </div>
@@ -391,46 +393,61 @@ const TEMPLATES = {
   '22806':{cols:3, rows:4, w:2, h:2, left:0.625, top:0.625, px:2.625, py:2.5}
 };
 
-function labelOpts(){ return { qr:$('optQR').checked, bar:$('optBar').checked, title:$('optTitle').checked, price:$('optPrice').checked, outline:$('optOutline').checked }; }
+function labelOpts(){ return { qr:$('optQR').checked, bar:$('optBar').checked, title:$('optTitle').checked, artist:$('optArtist').checked, medium:$('optMedium').checked, price:$('optPrice').checked, outline:$('optOutline').checked }; }
 
+function artistText(i){ return i.artist && !/^unknown$/i.test(i.artist) ? i.artist : 'Artist unknown'; }
+function mediumText(i,long){
+  let m=[i.medium,i.medium2].filter(Boolean).join(' + ');
+  if(long && i.support && !/^unknown$/i.test(i.support)) m += (m?' on ':'') + i.support.toLowerCase();
+  return m || 'Medium unknown';
+}
 function drawLabel(p, item, x, y, T, o){
   const pad = Math.min(0.08, T.h*0.1);
   const small = T.h<=0.6, square = Math.abs(T.w-T.h)<0.01;
   if(o.outline) p.outline(x,y,T.w,T.h);
   const priceStr = (o.price && item.price!=null)? '$'+(item.price%1? item.price.toFixed(2): item.price.toFixed(0)) : '';
-  if(small){ // tiny label: barcode + SKU only
-    const bh=T.h-pad*2-0.12;
-    if(o.bar) drawBars(p,code128Bits(item.sku),x+pad,y+pad,T.w-pad*2,bh);
-    p.text(fit(p,item.sku+(priceStr?'  '+priceStr:''),6,true,T.w-pad*2), x+T.w/2, y+pad+bh+0.01, 6, true, 'center');
+  if(small){ // 1/2" x 1-3/4": one text line, barcode, SKU + price
+    let cy=y+pad*0.6; const iw=T.w-pad*2;
+    const top=[o.title?item.title:'', o.artist?artistText(item):''].filter(Boolean).join(' · ');
+    if(top){ p.text(fit(p,top,5,false,iw),x+T.w/2,cy,5,false,'center'); cy+=0.08; }
+    const bh=(y+T.h-pad*0.6)-cy-0.1;
+    if(o.bar && bh>0.08) drawBars(p,code128Bits(item.sku),x+pad,cy,iw,bh);
+    p.text(fit(p,item.sku+(priceStr?'  '+priceStr:''),5.5,true,iw), x+T.w/2, cy+Math.max(bh,0)+0.005, 5.5, true, 'center');
     return;
   }
+  const big = T.h>=1.5;
+  const lines=[];
+  if(o.title)  lines.push({s:item.title, size: square?9:(big?12:7), bold:true});
+  if(o.artist) lines.push({s:artistText(item), size: square?7.5:(big?10:6), bold:false});
+  if(o.medium) lines.push({s:mediumText(item, big||square), size: square?7.5:(big?10:6), bold:false});
+  const lh = l => l.size/72*1.25;
+  const skuSize = square?7:(big?10:6.5), priceSize = square?11:(big?16:9);
+  const footH = Math.max(skuSize,priceSize)/72*1.05;
+
   if(square){
     let cy=y+pad; const iw=T.w-pad*2;
-    if(o.title){ p.text(fit(p,item.title,8,false,iw),x+T.w/2,cy,8,false,'center'); cy+=0.17; }
-    const bottomH = 0.2 + (o.bar?0.42:0);
-    const qs = Math.max(0, T.h - (cy-y) - bottomH - pad);
-    if(o.qr && qs>0.3) { drawQR(p,qrMatrix(item.sku),x+(T.w-qs)/2,cy,qs); cy+=qs+0.02; }
-    if(o.bar){ drawBars(p,code128Bits(item.sku),x+pad,cy,iw,0.38); cy+=0.41; }
-    p.text(fit(p,item.sku+(priceStr?'   '+priceStr:''),9,true,iw),x+T.w/2,cy,9,true,'center');
+    lines.forEach(l=>{ p.text(fit(p,l.s,l.size,l.bold,iw),x+T.w/2,cy,l.size,l.bold,'center'); cy+=lh(l); });
+    cy+=0.03;
+    const barH = o.bar?0.32:0;
+    const qs = Math.min(iw, (y+T.h-pad) - cy - footH - barH - 0.06);
+    if(o.qr && qs>0.35){ drawQR(p,qrMatrix(item.sku),x+(T.w-qs)/2,cy,qs); cy+=qs+0.02; }
+    if(o.bar){ drawBars(p,code128Bits(item.sku),x+pad,cy,iw,barH); cy+=barH+0.03; }
+    cy = y+T.h-pad-footH;
+    p.text(item.sku, x+pad, cy+(priceSize-skuSize)/72*0.8, skuSize, true, 'left');
+    if(priceStr) p.text(priceStr, x+T.w-pad, cy, priceSize, true, 'right');
     return;
   }
-  // rectangular labels
-  const big = T.h>=1.5;
+  // rectangular labels (5160, 5163)
   let rx=x+pad, rw=T.w-pad*2;
-  if(o.qr){ const qs=T.h-pad*2; drawQR(p,qrMatrix(item.sku),x+pad*0.5,y+pad,qs); rx=x+pad*0.5+qs+pad*0.5; rw=x+T.w-pad-rx; }
-  const tSize = big?11:6.5, sSize = big?13:8, gap = big?0.06:0.025;
+  if(o.qr){ const qs=Math.min(T.h-pad*2, T.w*0.34); drawQR(p,qrMatrix(item.sku),x+pad*0.5,y+(T.h-qs)/2,qs); rx=x+pad*0.5+qs+pad*0.5; rw=x+T.w-pad-rx; }
   let cy=y+pad;
-  if(o.title){ p.text(fit(p,item.title,tSize,false,rw),rx,cy,tSize,false,'left'); cy+=tSize/72*1.2+gap; }
-  if(big){
-    const meta=[[item.medium,item.medium2].filter(Boolean).join(' + '),item.size?item.size+' in':''].filter(Boolean).join(' · ');
-    if(meta){ p.text(fit(p,meta,8.5,false,rw),rx,cy,8.5,false,'left'); cy+=8.5/72*1.2+gap; }
-  }
-  const footH = sSize/72*1.15;
-  const barH = (y+T.h-pad) - cy - footH - gap;
-  if(o.bar && barH>0.12) { drawBars(p,code128Bits(item.sku),rx-0.03,cy,rw+0.03,barH); cy+=barH+gap; }
-  else cy = y+T.h-pad-footH;
-  p.text(item.sku, rx, cy, sSize, true, 'left');
-  if(priceStr) p.text(priceStr, rx+rw, cy, sSize, true, 'right');
+  lines.forEach(l=>{ p.text(fit(p,l.s,l.size,l.bold,rw),rx,cy,l.size,l.bold,'left'); cy+=lh(l); });
+  const gap = big?0.05:0.02;
+  const barH = (y+T.h-pad) - cy - footH - gap*2;
+  if(o.bar && barH>0.12){ cy+=gap; drawBars(p,code128Bits(item.sku),rx-0.03,cy,rw+0.03,barH); }
+  cy = y+T.h-pad-footH;
+  p.text(item.sku, rx, cy+(priceSize-skuSize)/72*0.8, skuSize, true, 'left');
+  if(priceStr) p.text(priceStr, rx+rw, cy, priceSize, true, 'right');
 }
 
 function labelQueue(){
@@ -493,7 +510,7 @@ function renderPreview(){
     return `<svg width="${T.w*scale}" height="${T.h*scale}" viewBox="0 0 ${T.w*scale} ${T.h*scale}">${parts.join('')}</svg>`;
   }).join('');
 }
-['tpl','optQR','optBar','optTitle','optPrice'].forEach(id=>$(id).addEventListener('change',renderPreview));
+['tpl','optQR','optBar','optTitle','optArtist','optMedium','optPrice'].forEach(id=>$(id).addEventListener('change',renderPreview));
 
 /* ---------------- images ---------------- */
 function barCanvas(text){
